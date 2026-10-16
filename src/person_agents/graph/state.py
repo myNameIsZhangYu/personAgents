@@ -14,3 +14,4 @@ class AgentState(TypedDict):
     degraded: bool
     error: str | None
     retry_count: int
+    session_id: str

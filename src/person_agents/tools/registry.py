@@ -5,6 +5,7 @@ from typing import Any
 import structlog
 
 from person_agents.tools.mcp_filesystem import MCPFilesystemTool
+from person_agents.tools.sandbox import DockerSandbox
 
 logger = structlog.get_logger()
 
@@ -48,6 +49,7 @@ class ToolRegistry:
 
 def register_default_tools(registry: ToolRegistry, workspace_root: str = "/tmp/person-agents-workspace") -> None:
     fs = MCPFilesystemTool(root_dir=workspace_root)
+    sandbox = DockerSandbox()
 
     async def fs_handler(arguments: dict) -> dict:
         return await fs.call(arguments)
@@ -65,5 +67,24 @@ def register_default_tools(registry: ToolRegistry, workspace_root: str = "/tmp/p
             "required": ["operation", "path"],
         },
         handler=fs_handler,
+        requires_confirm=True,
+    ))
+
+    async def shell_handler(arguments: dict) -> dict:
+        command = arguments.get("command", "")
+        result = await sandbox.execute(command)
+        return {"exit_code": result.exit_code, "stdout": result.stdout[:500], "stderr": result.stderr[:500]}
+
+    registry.register(ToolDef(
+        name="shell",
+        description="Execute a shell command inside a Docker sandbox with resource limits and no network",
+        parameters={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+            },
+            "required": ["command"],
+        },
+        handler=shell_handler,
         requires_confirm=True,
     ))

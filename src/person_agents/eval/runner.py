@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
@@ -8,6 +9,7 @@ from person_agents.observability.cost import CostTracker
 logger = structlog.get_logger()
 
 
+@dataclass
 class EvalCase:
     name: str
     input: str

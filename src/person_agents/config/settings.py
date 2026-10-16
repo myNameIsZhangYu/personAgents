@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     sandbox_timeout_s: int = 30
     sandbox_memory_mb: int = 256
     sandbox_cpus: float = 0.5
+    granted_permissions: str = "read,write"
 
 
 settings = Settings()

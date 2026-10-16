@@ -1,4 +1,22 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command: ["--help"]
+    env_file:
+      - .env
+    environment:
+      PERSON_AGENTS_DATA_DIR: /data
+      PERSON_AGENTS_SQLITE_PATH: /data/memory.db
+      PERSON_AGENTS_CHROMA_PATH: /data/chroma
+      LANGFUSE_HOST: http://langfuse:3000
+    volumes:
+      - app_data:/data
+    depends_on:
+      langfuse:
+        condition: service_healthy
+
   langfuse-db:
     image: postgres:16-alpine
     environment:
@@ -133,6 +151,7 @@ services:
       LANGFUSE_MIGRATION_V4_WRITE_MODE: dual
 
 volumes:
+  app_data:
   langfuse_pg_data:
   langfuse_ch_data:
   langfuse_s3_data:

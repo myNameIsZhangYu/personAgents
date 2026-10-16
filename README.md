@@ -7,7 +7,7 @@
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    CLI (Typer + Rich)                │
-│              run / chat / doctor / version           │
+│          run / chat / eval / doctor / version         │
 └────────────────────────┬────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────┐
@@ -41,8 +41,8 @@
 | 节点 | 职责 |
 |---|---|
 | **intent** | 将用户输入分类为 `chat` / `task` / `memory_write` / `tool_use` |
-| **planner** | 将复杂任务拆解为步骤列表（JSON 数组） |
-| **executor** | 按步骤执行，调用工具或 LLM |
+| **planner** | 注入工具 schema 与记忆上下文，输出结构化步骤 |
+| **executor** | 按步骤调用注册表工具或 LLM，工具参数来自规划结果 |
 | **critic** | 评估执行结果，返回 `success` / `retry` / `fail` |
 | **memory_write** | 成功后将经验写入长期记忆 |
 
@@ -100,7 +100,7 @@
 
 ### 可观测性
 
-- **Langfuse**（自托管 Docker）: 记录每次 LLM 调用的 input/output/token/延迟/降级状态
+- **Langfuse**（自托管 Docker）: 记录每次 LLM 调用的 input/output/token/延迟/降级状态，并按 `intent` / `planner` / `executor` / `critic` 生成嵌套节点 span
 - **structlog**: 结构化 JSON 日志，支持 console/JSON 切换
 - **CostTracker**: 按 session 追踪 token 消耗和调用次数
 
@@ -135,6 +135,9 @@ uv run person-agents run "你好"
 # 交互式对话
 uv run person-agents chat
 
+# 评估（baseline 用例，可输出 JSON 报告）
+uv run person-agents eval --output eval-report.json
+
 # 健康检查（LLM API / 数据目录 / Ollama 连通性）
 uv run person-agents doctor
 ```
@@ -143,6 +146,9 @@ uv run person-agents doctor
 
 ```bash
 docker compose up -d
+# 构建并启动应用与自托管监控栈（生产建议先移除 app 服务的 --help 命令）
+docker compose up -d --build app
+
 # 打开 http://localhost:3000 → 注册账号 → 创建项目 → 获取 API Key
 # 将 pk-lf-xxx / sk-lf-xxx 填入 .env 的 LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY
 ```
@@ -161,7 +167,7 @@ uv run ruff check src tests
 
 ```
 src/person_agents/
-├── cli.py                 # Typer 入口（version/doctor/run/chat）
+├── cli.py                 # Typer 入口（version/doctor/run/chat/eval）
 ├── config/
 │   ├── settings.py        # pydantic-settings 多环境配置
 │   └── fallback.yaml      # LLM 降级链配置
@@ -188,7 +194,7 @@ src/person_agents/
 │   ├── rate_limiter.py    # 令牌桶限流
 │   └── audit.py           # SQLite 审计日志
 ├── observability/
-│   ├── langfuse.py        # Langfuse OTLP 集成
+│   ├── langfuse.py        # Langfuse trace 与嵌套节点 span
 │   ├── logging.py         # structlog 配置
 │   └── cost.py            # token 成本追踪
 └── eval/
@@ -200,6 +206,7 @@ src/person_agents/
 
 | 服务 | 端口 | 用途 |
 |---|---|---|
+| app | — | 编译后的 LangGraph agent 应用 |
 | langfuse | 3000 | Web UI + API |
 | langfuse-db | 5432 | PostgreSQL（元数据） |
 | langfuse-clickhouse | 8123/9000 | ClickHouse（trace 存储） |
@@ -220,6 +227,15 @@ src/person_agents/
 | CLI | Typer + Rich | ≥0.9 |
 | 沙箱 | Docker | — |
 | 校验 | Pydantic v2 | ≥2.0 |
+
+## 工程化与部署
+
+- **应用镜像**：`Dockerfile.app` 使用非 root 运行时和独立数据卷。
+- **CI**：`.github/workflows/ci.yml` 在 push/PR 时执行 `ruff check` 和 `pytest`。
+- **治理配置**：通过 `PERSON_AGENTS_GRANTED_PERMISSIONS=read,write` 控制默认权限；生产环境不应直接授予 `shell`。
+- **沙箱**：shell 工具使用一次性容器，默认禁网并限制 CPU / 内存。
+- **数据持久化**：agent 数据、Langfuse 元数据、trace 与对象存储均使用 named volumes。
+- **评估**：`person-agents eval` 直接调用当前 fallback chain，并生成 JSON pass rate / token 报告。
 
 ## License
 

@@ -1,4 +1,7 @@
+from typing import Any
+
 import structlog
+from langfuse import propagate_attributes
 
 from person_agents.config.settings import settings
 
@@ -17,6 +20,32 @@ def get_langfuse():
             host=settings.langfuse_host,
         )
     return _client
+
+
+def trace_graph_node(
+    session_id: str,
+    node_name: str,
+    input_data: Any,
+    output_data: Any,
+    latency_ms: int,
+    error: str | None = None,
+) -> None:
+    client = get_langfuse()
+    if client is None:
+        return
+    try:
+        with propagate_attributes(session_id=session_id, trace_name="agent_graph"), \
+            client.start_as_current_observation(name="agent_graph"), \
+            client.start_as_current_observation(name=f"graph_node:{node_name}") as span:
+            span.update(
+                input=input_data,
+                output=output_data,
+                metadata={"latency_ms": latency_ms, "error": error},
+                level="ERROR" if error else "DEFAULT",
+            )
+        client.flush()
+    except Exception:
+        logger.warning("langfuse_trace_failed", node=node_name, exc_info=True)
 
 
 def trace_llm_call(

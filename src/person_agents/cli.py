@@ -1,6 +1,8 @@
 import asyncio
+import json
 import signal
 import sys
+from pathlib import Path
 
 import structlog
 import typer
@@ -8,9 +10,8 @@ from rich.console import Console
 
 from person_agents import __version__
 from person_agents.config.settings import settings
-from person_agents.llm.fallback import LLMFallbackError, call_with_fallback
+from person_agents.llm.fallback import LLMFallbackError
 from person_agents.observability.cost import CostTracker
-from person_agents.observability.langfuse import trace_llm_call
 from person_agents.observability.logging import setup_logging
 
 app = typer.Typer(name="person-agents", help="Personal agent CLI")
@@ -62,6 +63,25 @@ def _check_write(path) -> bool:
 
 
 @app.command()
+def eval(
+    output: str = typer.Option("", help="Write the JSON evaluation report to this path."),
+) -> None:
+    """Run the baseline LLM evaluation suite and print a JSON report."""
+    setup_logging()
+    from person_agents.eval.cases.baseline import BASELINE_CASES
+    from person_agents.eval.runner import EvalRunner
+
+    async def _eval():
+        report = await EvalRunner().run_all(BASELINE_CASES)
+        rendered = json.dumps(report, ensure_ascii=False, indent=2)
+        console.print(rendered)
+        if output:
+            Path(output).write_text(rendered + "\n", encoding="utf-8")
+
+    asyncio.run(_eval())
+
+
+@app.command()
 def run(
     prompt: str = typer.Argument(..., help="User prompt"),
     system: str = typer.Option("You are a helpful personal assistant.", help="System prompt"),
@@ -71,22 +91,16 @@ def run(
     signal.signal(signal.SIGTERM, _signal_handler)
     signal.signal(signal.SIGINT, _signal_handler)
 
-    tracker = CostTracker(session_id="cli-session")
-    messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+    CostTracker(session_id="cli-session")
 
     async def _run():
-        try:
-            resp = await call_with_fallback(messages)
-            tracker.record(resp.model, resp.prompt_tokens, resp.completion_tokens, 0)
-            trace_llm_call(
-                "cli-run", resp.model, resp.prompt_tokens, resp.completion_tokens, 0,
-                messages=messages, output=resp.content, degraded=resp.degraded,
-            )
-            console.print(resp.content)
-            logger.info("llm_complete", model=resp.model, degraded=resp.degraded, total_tokens=tracker.total_tokens)
-        except LLMFallbackError as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+        from person_agents.graph.engine import run_graph
+        result = await run_graph(prompt, session_id="cli-run")
+        final_output = result.get("tool_results", [{}])[-1].get("output", "") if result.get("tool_results") else ""
+        if final_output:
+            console.print(final_output)
+        else:
+            console.print("[dim]Task completed.[/dim]")
 
     asyncio.run(_run())
 
@@ -101,28 +115,17 @@ def chat() -> None:
     tracker = CostTracker(session_id="chat-session")
 
     async def _chat() -> None:
-        from person_agents.graph.nodes import executor_node, intent_node
+        from person_agents.graph.engine import run_graph
 
         while True:
             try:
                 user_input = await asyncio.to_thread(console.input, "[bold blue]> [/bold blue]")
                 if not user_input.strip():
                     continue
-                state = {"messages": [{"role": "user", "content": user_input}], "intent": "", "plan": [], "current_step": 0, "tool_results": [], "critic_feedback": "", "memory_context": [], "status": "", "degraded": False, "error": None}
-                result = await intent_node(state)
-                state.update(result)
-                if state["intent"] in ("chat", "task", "tool_use"):
-                    result = await executor_node(state)
-                    state.update(result)
-                    for r in state["tool_results"]:
-                        console.print(r["output"])
-                        tracker.record("agent", 0, 0, 0)
-                else:
-                    messages = [{"role": "user", "content": user_input}]
-                    resp = await call_with_fallback(messages)
-                    tracker.record(resp.model, resp.prompt_tokens, resp.completion_tokens, 0)
-                    console.print(resp.content)
-                trace_llm_call("cli-chat", "agent", 0, 0, 0)
+                result = await run_graph(user_input, session_id="cli-chat")
+                final_output = result.get("tool_results", [{}])[-1].get("output", "") if result.get("tool_results") else ""
+                if final_output:
+                    console.print(final_output)
             except KeyboardInterrupt:
                 console.print(f"\n[dim]session: {tracker.total_calls} calls, {tracker.total_tokens} tokens[/dim]")
                 break

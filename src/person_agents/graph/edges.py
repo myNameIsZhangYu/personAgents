@@ -8,6 +8,10 @@ def route_after_intent(state: AgentState) -> str:
         return "executor"
     if state["intent"] == "memory_write":
         return "memory_write"
+    if state["intent"] == "task":
+        return "planner"
+    if state["intent"] == "tool_use":
+        return "planner"
     return "planner"
 
 
