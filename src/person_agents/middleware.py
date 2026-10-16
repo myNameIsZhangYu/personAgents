@@ -43,6 +43,13 @@ async def governed_tool_call(
         _audit.record("middleware", f"tool:{tool_name}", str(arguments), status="permission_denied")
         raise PermissionError(f"Permission denied for {required_permission.value}: {tool_name}")
 
+    if tool_name == "shell":
+        command = str(arguments.get("command", ""))
+        allowed, reason = _policy.check_command(command)
+        if not allowed:
+            _audit.record("middleware", f"tool:{tool_name}", command, status="policy_rejected", error=reason)
+            raise PermissionError(reason)
+
     result = await handler(arguments)
     _audit.record("middleware", f"tool:{tool_name}", str(arguments), str(result)[:200])
     return result

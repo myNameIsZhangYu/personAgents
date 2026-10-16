@@ -116,8 +116,19 @@ async def executor_node(state: AgentState) -> dict[str, Any]:
             arguments = step.get("arguments") or {"operation": "read", "path": action.strip()}
             if not isinstance(arguments, dict):
                 arguments = {"operation": "read", "path": action.strip()}
-            tool_result = await governed_tool_call(tool, arguments, tool_def.handler)
-            output = str(tool_result)
+            try:
+                tool_result = await governed_tool_call(tool, arguments, tool_def.handler)
+                output = str(tool_result)
+            except (PermissionError, RuntimeError) as exc:
+                output = f"Tool execution rejected: {exc}"
+                if state["current_step"] + 1 >= len(plan):
+                    return {
+                        "tool_results": [result],
+                        "current_step": len(plan),
+                        "critic_feedback": "fail",
+                        "status": "fail",
+                        "error": str(exc),
+                    }
         else:
             output = f"Unknown tool: {tool}"
     else:
