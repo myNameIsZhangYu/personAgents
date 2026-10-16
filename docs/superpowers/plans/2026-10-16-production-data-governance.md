@@ -92,11 +92,11 @@
 - Consumes: `Settings`.
 - Produces: `validate_production_settings(settings, production=True)` raising `ConfigurationError`; CLI `doctor --production`.
 
-- [ ] Validate required production credentials, Redis URL, Langfuse keys, and secret uniqueness/length.
-- [ ] Block known default passwords and repeated secrets.
-- [ ] Add explicit opt-in production mode rather than auto-detecting containers.
-- [ ] Add tests for missing, default, duplicate, and valid configurations.
-- [ ] Commit.
+- [x] Validate required production credentials, Redis URL, Langfuse keys, and secret uniqueness/length.
+- [x] Block known default passwords and repeated secrets.
+- [x] Add explicit opt-in production mode rather than auto-detecting containers.
+- [x] Add tests for missing, default, duplicate, and valid configurations.
+- [x] Commit.
 
 ### Task 5: Audit Redaction and Retention
 

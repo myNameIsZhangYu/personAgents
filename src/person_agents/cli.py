@@ -30,7 +30,9 @@ def version() -> None:
 
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    production: bool = typer.Option(False, "--production", help="Validate production deployment requirements."),
+) -> None:
     """Check system health: config, LLM API, Ollama, directories."""
     setup_logging()
     checks: list[tuple[str, bool, str]] = []
@@ -49,6 +51,16 @@ def doctor() -> None:
     for name, ok, detail in checks:
         status = "[green]✓[/green]" if ok else "[red]✗[/red]"
         console.print(f"  {status} {name}: {detail}")
+
+    if production:
+        from person_agents.config.validation import ConfigurationError, validate_production_settings
+
+        try:
+            validate_production_settings(settings)
+            console.print("  [green]✓[/green] Production configuration: ok")
+        except ConfigurationError as exc:
+            console.print(f"  [red]✗[/red] Production configuration: {exc}")
+            raise typer.Exit(code=2) from exc
 
 
 def _check_write(path) -> bool:

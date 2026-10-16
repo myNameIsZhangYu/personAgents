@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     prompt_version: str = "default-v1"
     tool_config_version: str = "default-v1"
     policy_version: str = "default-v1"
+    nextauth_secret: str = ""
+    salt: str = ""
+    encryption_key: str = ""
 
 
 settings = Settings()
