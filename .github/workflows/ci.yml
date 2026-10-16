@@ -20,5 +20,4 @@ jobs:
       - name: Ruff
         run: uv run ruff check src tests
       - name: Tests
-        env:
         run: uv run pytest -q
