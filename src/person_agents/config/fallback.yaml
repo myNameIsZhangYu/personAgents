@@ -1,0 +1,20 @@
+fallback_chain:
+  - name: primary
+    model: glm-5.3-flash
+    provider: openai
+    max_retries: 2
+    timeout_s: 30
+
+  - name: fallback
+    model: glm-5.3-flash
+    provider: openai
+    max_retries: 1
+    timeout_s: 15
+    trigger_on: [timeout, rate_limit, server_error]
+
+  - name: local
+    model: qwen2.5:7b
+    provider: ollama
+    base_url: http://localhost:11434
+    timeout_s: 60
+    trigger_on: [all_previous_failed]
