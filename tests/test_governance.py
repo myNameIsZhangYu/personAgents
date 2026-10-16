@@ -1,4 +1,6 @@
 
+import pytest
+
 from person_agents.governance.policy import Permission, PolicyEngine
 from person_agents.governance.rate_limiter import RateLimiter
 
@@ -47,3 +49,15 @@ class TestRateLimiter:
         assert limiter.allow_llm() is True
         assert limiter.allow_llm() is True
         assert limiter.allow_llm() is False
+
+    def test_llm_usage_quota(self) -> None:
+        from types import SimpleNamespace
+
+        from person_agents.runtime.state import InMemoryStateStore
+
+        limiter = RateLimiter(InMemoryStateStore())
+        response = SimpleNamespace(content="hello world", prompt_tokens=900000, completion_tokens=100000)
+        tokens, _ = limiter.record_llm_usage(response, "user", "tenant")
+        assert tokens == 1000000
+        with pytest.raises(RuntimeError, match="Daily token quota"):
+            limiter.record_llm_usage(response, "user", "tenant")

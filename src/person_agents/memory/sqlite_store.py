@@ -71,6 +71,8 @@ MIGRATIONS = [
     "ALTER TABLE runs ADD COLUMN tool_config_version TEXT",
     "ALTER TABLE runs ADD COLUMN policy_version TEXT",
     "ALTER TABLE runs ADD COLUMN metadata_json TEXT",
+    "ALTER TABLE runs ADD COLUMN total_tokens INTEGER DEFAULT 0",
+    "ALTER TABLE runs ADD COLUMN total_cost_usd REAL DEFAULT 0.0",
 ]
 
 
@@ -195,11 +197,22 @@ class SQLiteStore:
         )
         conn.commit()
 
-    def update_run(self, run_id: str, owner_user_id: str, tenant_id: str, status: str, output: str | None = None, confirmation_token: str | None = None, error: str | None = None) -> bool:
+    def update_run(
+        self,
+        run_id: str,
+        owner_user_id: str,
+        tenant_id: str,
+        status: str,
+        output: str | None = None,
+        confirmation_token: str | None = None,
+        error: str | None = None,
+        total_tokens: int = 0,
+        total_cost: float = 0.0,
+    ) -> bool:
         conn = self.connect()
         cursor = conn.execute(
-            "UPDATE runs SET status=?, output=?, confirmation_token=?, error=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
-            (status, output, confirmation_token, error, run_id, owner_user_id, tenant_id),
+            "UPDATE runs SET status=?, output=?, confirmation_token=?, error=?, total_tokens=COALESCE(total_tokens,0)+?, total_cost_usd=COALESCE(total_cost_usd,0.0)+?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
+            (status, output, confirmation_token, error, total_tokens, total_cost, run_id, owner_user_id, tenant_id),
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -207,12 +220,12 @@ class SQLiteStore:
     def get_run(self, run_id: str, owner_user_id: str, tenant_id: str) -> dict[str, Any] | None:
         conn = self.connect()
         row = conn.execute(
-            "SELECT run_id, tenant_id, owner_user_id, session_id, prompt, status, output, confirmation_token, error, created_at, updated_at, attempts, agent_version, prompt_version, tool_config_version, policy_version, metadata_json FROM runs WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
+            "SELECT run_id, tenant_id, owner_user_id, session_id, prompt, status, output, confirmation_token, error, created_at, updated_at, attempts, agent_version, prompt_version, tool_config_version, policy_version, metadata_json, total_tokens, total_cost_usd FROM runs WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
             (run_id, owner_user_id, tenant_id),
         ).fetchone()
         if row is None:
             return None
-        columns = ["run_id", "tenant_id", "owner_user_id", "session_id", "prompt", "status", "output", "confirmation_token", "error", "created_at", "updated_at", "attempts", "agent_version", "prompt_version", "tool_config_version", "policy_version", "metadata_json"]
+        columns = ["run_id", "tenant_id", "owner_user_id", "session_id", "prompt", "status", "output", "confirmation_token", "error", "created_at", "updated_at", "attempts", "agent_version", "prompt_version", "tool_config_version", "policy_version", "metadata_json", "total_tokens", "total_cost_usd"]
         return dict(zip(columns, row))
 
     def claim_next_run(self, worker_id: str, lease_seconds: int = 60) -> dict[str, Any] | None:

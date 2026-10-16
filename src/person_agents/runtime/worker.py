@@ -6,6 +6,7 @@ import structlog
 from prometheus_client import Counter
 
 from person_agents.config.settings import settings
+from person_agents.governance.rate_limiter import RateLimiter
 from person_agents.memory.sqlite_store import SQLiteStore
 from person_agents.runtime.jobs import JobManager
 from person_agents.runtime.state import create_state_store
@@ -20,6 +21,7 @@ run_dead_letter_total = Counter("run_dead_letter_total", "Runs moved to dead let
 async def run_one(job: dict, store: SQLiteStore, worker_id: str = "inline", lease_seconds: int = 60) -> None:
     from person_agents.graph.engine import run_graph
     state_store = create_state_store(settings.redis_url)
+    rate_limiter = RateLimiter(state_store)
 
     manager = JobManager(store)
     if state_store.get_json(f"cancel:{job['run_id']}"):
@@ -36,6 +38,8 @@ async def run_one(job: dict, store: SQLiteStore, worker_id: str = "inline", leas
             run_graph(job["prompt"], session_id=job["session_id"], context=context),
             timeout=120,
         )
+        llm_result = result.get("llm_response")
+        tokens, cost = rate_limiter.record_llm_usage(llm_result, job["owner_user_id"], job["tenant_id"]) if llm_result else (0, 0.0)
     except (RuntimeError, ValueError, TimeoutError, OSError) as exc:
         attempts = int(job.get("attempts", 1))
         if attempts >= settings.run_max_attempts:
@@ -67,6 +71,8 @@ async def run_one(job: dict, store: SQLiteStore, worker_id: str = "inline", leas
         status,
         str(output) if output is not None else None,
         confirmation_token,
+        total_tokens=tokens,
+        total_cost=cost,
     )
 
 

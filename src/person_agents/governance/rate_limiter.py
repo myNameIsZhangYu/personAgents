@@ -92,6 +92,14 @@ class RateLimiter:
             key = self._day_key("cost_daily", tenant_id, owner_user_id)
             self.state_store.set_json(key, (self.state_store.get_json(key) or 0.0) + cost, ttl_seconds=172800)
 
+    def record_llm_usage(self, response: object, owner_user_id: str = "local", tenant_id: str = "default") -> tuple[int, float]:
+        tokens = response.prompt_tokens + response.completion_tokens
+        estimated_tokens = tokens or (len(str(getattr(response, "content", ""))) + 3) // 4
+        cost = estimated_tokens * 0.000002
+        self.record_usage(owner_user_id, tenant_id, estimated_tokens, cost)
+        self.check_usage(owner_user_id, tenant_id)
+        return estimated_tokens, cost
+
     def check_usage(self, owner_user_id: str = "local", tenant_id: str = "default") -> None:
         from person_agents.config.settings import settings
 

@@ -106,6 +106,7 @@ async def governed_llm_call(
     import time
     start = time.monotonic()
     result = await call_fn(messages)
+    _rate_limiter.record_llm_usage(result, context.user_id, context.tenant_id)
     elapsed_ms = int((time.monotonic() - start) * 1000)
     llm_calls_total.labels("success", str(result.degraded).lower()).inc()
 

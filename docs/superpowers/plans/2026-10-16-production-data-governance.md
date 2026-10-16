@@ -73,12 +73,12 @@
 - Consumes: `LLMResponse`, `RateLimiter`, `RequestContext`.
 - Produces: `RateLimiter.record_llm_usage()`, fallback context metadata, run usage columns `total_tokens`, `total_cost_usd`.
 
-- [ ] Add model-independent estimate for missing usage fields.
-- [ ] Record prompt/completion tokens and estimated cost after each governed LLM call.
-- [ ] Enforce token/cost quota before LLM calls and after run completion.
-- [ ] Persist total usage per run.
-- [ ] Add tests for usage recording, quota rejection, and run persistence.
-- [ ] Commit.
+- [x] Add model-independent estimate for missing usage fields.
+- [x] Record prompt/completion tokens and estimated cost after each governed LLM call.
+- [x] Enforce token/cost quota before LLM calls and after run completion.
+- [x] Persist total usage per run.
+- [x] Add tests for usage recording, quota rejection, and run persistence.
+- [x] Commit.
 
 ### Task 4: Production Secret Validation
 
