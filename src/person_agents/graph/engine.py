@@ -12,6 +12,7 @@ from person_agents.graph.nodes import (
     planner_node,
 )
 from person_agents.graph.state import AgentState
+from person_agents.security.context import RequestContext
 
 
 def build_graph(checkpointer: AsyncSqliteSaver | None = None):
@@ -37,7 +38,8 @@ def build_graph(checkpointer: AsyncSqliteSaver | None = None):
     return builder.compile(checkpointer=checkpointer)
 
 
-async def run_graph(user_input: str, session_id: str = "cli") -> AgentState:
+async def run_graph(user_input: str, session_id: str = "cli", context: RequestContext | None = None) -> AgentState:
+    context = context or RequestContext(user_id=session_id, tenant_id="default", session_id=session_id)
     graph = build_graph()
     initial_state: AgentState = {
         "messages": [{"role": "user", "content": user_input}],
@@ -51,7 +53,9 @@ async def run_graph(user_input: str, session_id: str = "cli") -> AgentState:
         "degraded": False,
         "error": None,
         "retry_count": 0,
-        "session_id": session_id,
+        "session_id": context.session_id,
+        "tenant_id": context.tenant_id,
+        "owner_user_id": context.user_id,
     }
     config = {"configurable": {"thread_id": session_id}}
     result = await graph.ainvoke(initial_state, config)

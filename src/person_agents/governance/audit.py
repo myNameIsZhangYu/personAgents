@@ -26,14 +26,32 @@ class AuditLogger:
                 input TEXT,
                 output TEXT,
                 status TEXT NOT NULL,
-                error TEXT
+                error TEXT,
+                request_id TEXT,
+                owner_user_id TEXT,
+                tenant_id TEXT
             )""")
+            columns = {row[1] for row in self._conn.execute("PRAGMA table_info(audit_log)")}
+            for column in ("request_id", "owner_user_id", "tenant_id"):
+                if column not in columns:
+                    self._conn.execute(f"ALTER TABLE audit_log ADD COLUMN {column} TEXT")
         return self._conn
 
-    def record(self, agent: str, action: str, input_data: str = "", output_data: str = "", status: str = "success", error: str = "") -> None:
+    def record(
+        self,
+        agent: str,
+        action: str,
+        input_data: str = "",
+        output_data: str = "",
+        status: str = "success",
+        error: str = "",
+        request_id: str | None = None,
+        owner_user_id: str | None = None,
+        tenant_id: str | None = None,
+    ) -> None:
         conn = self.connect()
         conn.execute(
-            "INSERT INTO audit_log (timestamp, agent, action, input, output, status, error) VALUES (?,?,?,?,?,?,?)",
-            (datetime.now(UTC).isoformat(), agent, action, input_data, output_data, status, error),
+            "INSERT INTO audit_log (timestamp, agent, action, input, output, status, error, request_id, owner_user_id, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (datetime.now(UTC).isoformat(), agent, action, input_data, output_data, status, error, request_id, owner_user_id, tenant_id),
         )
         conn.commit()

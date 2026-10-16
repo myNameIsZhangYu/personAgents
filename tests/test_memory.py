@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from person_agents.memory.sqlite_store import SQLiteStore
+from person_agents.memory.vector_store import VectorStore
 
 
 @pytest.fixture
@@ -11,6 +12,14 @@ def store(tmp_path: Path) -> SQLiteStore:
 
 
 class TestSQLiteStore:
+    def test_user_isolation(self, store: SQLiteStore) -> None:
+        store.upsert("k", "alice", owner_user_id="a", tenant_id="t")
+        store.upsert("k", "bob", owner_user_id="b", tenant_id="t")
+        assert store.get("k", owner_user_id="a", tenant_id="t")["value"] == "alice"
+        assert store.search("alice", owner_user_id="b", tenant_id="t") == []
+        assert store.delete("k", owner_user_id="a", tenant_id="t") is True
+        assert store.delete("k", owner_user_id="a", tenant_id="t") is False
+
     def test_upsert_and_get(self, store: SQLiteStore) -> None:
         store.upsert("pref_style", "concise replies", category="preference")
         result = store.get("pref_style")
@@ -37,3 +46,12 @@ class TestSQLiteStore:
         conn = store.connect()
         mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
         assert mode == "wal"
+
+
+class TestVectorStore:
+    def test_user_isolated_query(self, tmp_path: Path) -> None:
+        alice = VectorStore(persist_dir=tmp_path / "alice")
+        bob = VectorStore(persist_dir=tmp_path / "alice")
+        alice.add("alice likes Python", owner_user_id="alice", tenant_id="t")
+        results = bob.query("Python", owner_user_id="bob", tenant_id="t")
+        assert results == []

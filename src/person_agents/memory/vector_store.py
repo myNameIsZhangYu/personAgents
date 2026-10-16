@@ -22,15 +22,17 @@ class VectorStore:
             self._client = chromadb.PersistentClient(path=str(self.persist_dir))
             self._collection = self._client.get_or_create_collection("memories")
 
-    def add(self, text: str, metadata: dict[str, Any] | None = None) -> str:
+    def add(self, text: str, metadata: dict[str, Any] | None = None, owner_user_id: str = "local", tenant_id: str = "default") -> str:
         self._ensure_client()
         doc_id = str(uuid.uuid4())
-        self._collection.add(documents=[text], ids=[doc_id], metadatas=[metadata or {}])
+        scoped_metadata = {**(metadata or {}), "owner_user_id": owner_user_id, "tenant_id": tenant_id}
+        self._collection.add(documents=[text], ids=[doc_id], metadatas=[scoped_metadata])
         return doc_id
 
-    def query(self, text: str, n_results: int = 5) -> list[dict[str, Any]]:
+    def query(self, text: str, n_results: int = 5, owner_user_id: str = "local", tenant_id: str = "default") -> list[dict[str, Any]]:
         self._ensure_client()
-        results = self._collection.query(query_texts=[text], n_results=n_results)
+        where = {"$and": [{"owner_user_id": {"$eq": owner_user_id}}, {"tenant_id": {"$eq": tenant_id}}]}
+        results = self._collection.query(query_texts=[text], n_results=n_results, where=where)
         docs = results.get("documents", [[]])[0]
         metas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]

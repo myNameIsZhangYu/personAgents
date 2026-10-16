@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.app
-    command: ["--help"]
+    command: ["serve"]
     env_file:
       - .env
     environment:
@@ -13,6 +13,8 @@ services:
       LANGFUSE_HOST: http://langfuse:3000
     volumes:
       - app_data:/data
+    ports:
+      - "8000:8000"
     depends_on:
       langfuse:
         condition: service_healthy

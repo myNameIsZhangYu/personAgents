@@ -9,6 +9,7 @@ from person_agents.memory.sqlite_store import SQLiteStore
 from person_agents.memory.vector_store import VectorStore
 from person_agents.middleware import governed_llm_call, governed_tool_call
 from person_agents.observability.langfuse import trace_graph_node
+from person_agents.security.context import RequestContext
 from person_agents.tools.registry import ToolRegistry, register_default_tools
 
 logger = structlog.get_logger()
@@ -43,7 +44,12 @@ def _get_registry() -> ToolRegistry:
 async def intent_node(state: AgentState) -> dict[str, Any]:
     started = time.monotonic()
     user_input = state["messages"][-1]["content"]
-    memory_hits = _get_vector().query(user_input, n_results=3)
+    context = RequestContext(
+        user_id=state.get("owner_user_id", state.get("session_id", "local")),
+        tenant_id=state.get("tenant_id", "default"),
+        session_id=state.get("session_id", "cli"),
+    )
+    memory_hits = _get_vector().query(user_input, n_results=3, owner_user_id=context.user_id, tenant_id=context.tenant_id)
     memory_text = "\n".join(f"- {m['text']}" for m in memory_hits if m.get("text"))
     resp = await call_with_fallback([
         {"role": "system", "content": f"Classify the user's intent as one of: chat, task, memory_write, tool_use. Return ONLY the intent word.\n\nRelevant memory context:\n{memory_text}"},
@@ -92,6 +98,11 @@ async def planner_node(state: AgentState) -> dict[str, Any]:
 
 async def executor_node(state: AgentState) -> dict[str, Any]:
     started = time.monotonic()
+    graph_context = RequestContext(
+        user_id=state.get("owner_user_id", state.get("session_id", "local")),
+        tenant_id=state.get("tenant_id", "default"),
+        session_id=state.get("session_id", "cli"),
+    )
     plan = state.get("plan", [])
     if not plan or state["current_step"] >= len(plan):
         user_input = state["messages"][-1]["content"]
@@ -100,7 +111,7 @@ async def executor_node(state: AgentState) -> dict[str, Any]:
         resp = await governed_llm_call([
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": user_input},
-        ], _llm)
+        ], _llm, graph_context)
         result = {"step": 0, "action": user_input, "tool": "none", "output": resp.content}
         trace_graph_node(state.get("session_id", "agent"), "executor", {"input": user_input}, result, int((time.monotonic() - started) * 1000))
         return {"tool_results": [result], "current_step": 1}
@@ -117,7 +128,14 @@ async def executor_node(state: AgentState) -> dict[str, Any]:
             if not isinstance(arguments, dict):
                 arguments = {"operation": "read", "path": action.strip()}
             try:
-                tool_result = await governed_tool_call(tool, arguments, tool_def.handler)
+                tool_result = await governed_tool_call(
+                    tool,
+                    arguments,
+                    tool_def.handler,
+                    context=context,
+                    tool_schema=tool_def.parameters,
+                    requires_confirmation=tool_def.requires_confirm,
+                )
                 output = str(tool_result)
             except (PermissionError, RuntimeError) as exc:
                 output = f"Tool execution rejected: {exc}"
@@ -137,7 +155,7 @@ async def executor_node(state: AgentState) -> dict[str, Any]:
         resp = await governed_llm_call([
             {"role": "system", "content": f"Execute the action. Relevant context:\n{context}"},
             {"role": "user", "content": action},
-        ], _llm)
+        ], _llm, graph_context)
         output = resp.content
 
     result = {"step": state["current_step"], "action": action, "tool": tool, "output": output}
@@ -163,7 +181,18 @@ async def memory_write_node(state: AgentState) -> dict[str, Any]:
         user_input = state["messages"][-1]["content"]
         result = state["tool_results"][-1]["output"][:300]
         key = f"memory_{hash(user_input)}"
-        _get_store().upsert(key, result, category="experience")
-        _get_vector().add(result, {"source": "agent", "session": state.get("session_id", "")})
+        _get_store().upsert(
+            key,
+            result,
+            category="experience",
+            owner_user_id=state.get("owner_user_id", "local"),
+            tenant_id=state.get("tenant_id", "default"),
+        )
+        _get_vector().add(
+            result,
+            {"source": "agent", "session": state.get("session_id", "")},
+            owner_user_id=state.get("owner_user_id", "local"),
+            tenant_id=state.get("tenant_id", "default"),
+        )
         logger.info("memory_written", key=key)
     return {}

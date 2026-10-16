@@ -7,7 +7,7 @@
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    CLI (Typer + Rich)                │
-│          run / chat / eval / doctor / version         │
+│      serve / run / chat / eval / doctor / version      │
 └────────────────────────┬────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────┐
@@ -230,12 +230,28 @@ src/person_agents/
 
 ## 工程化与部署
 
+### API 服务
+
+`POST /runs` 使用 `X-API-Key` 认证。`API_KEY_HASH` 保存的是 API key 的 SHA-256：
+
+```bash
+printf -v API_KEY_HASH '%s' "$(printf 'your-key' | sha256sum | cut -d' ' -f1)"
+curl -X POST http://localhost:8000/runs \
+  -H 'X-API-Key: your-key' \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"What is 2+2?"}'
+```
+
+危险工具会返回 `status=confirmation_required` 和一次性 `confirmation_token`。当前 API 核心已实现认证、租户上下文、用户隔离、schema 校验、确认工作流和 `/healthz`；批准/拒绝 endpoint 仍在下一批实现中。
+
+
 - **应用镜像**：`Dockerfile.app` 使用非 root 运行时和独立数据卷。
 - **CI**：`.github/workflows/ci.yml` 在 push/PR 时执行 `ruff check` 和 `pytest`。
 - **治理配置**：通过 `PERSON_AGENTS_GRANTED_PERMISSIONS=read,write` 控制默认权限；生产环境不应直接授予 `shell`。
 - **沙箱**：shell 工具使用一次性容器，默认禁网并限制 CPU / 内存。
 - **数据持久化**：agent 数据、Langfuse 元数据、trace 与对象存储均使用 named volumes。
 - **评估**：`person-agents eval` 直接调用当前 fallback chain，并生成 JSON pass rate / token 报告。
+- **生产核心**：FastAPI、API key 认证、tenant/user 隔离、JSON Schema 工具校验、危险工具人工确认和 Docker 服务入口已接入。
 
 ## License
 

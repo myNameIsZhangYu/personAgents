@@ -15,3 +15,5 @@ class AgentState(TypedDict):
     error: str | None
     retry_count: int
     session_id: str
+    tenant_id: str
+    owner_user_id: str

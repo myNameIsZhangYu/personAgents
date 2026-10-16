@@ -82,6 +82,17 @@ def eval(
 
 
 @app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", help="Bind host"),
+    port: int = typer.Option(8000, help="Bind port"),
+) -> None:
+    """Run the authenticated HTTP API."""
+    import uvicorn
+
+    uvicorn.run("person_agents.api.app:app", host=host, port=port)
+
+
+@app.command()
 def run(
     prompt: str = typer.Argument(..., help="User prompt"),
     system: str = typer.Option("You are a helpful personal assistant.", help="System prompt"),

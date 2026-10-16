@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     sandbox_memory_mb: int = 256
     sandbox_cpus: float = 0.5
     granted_permissions: str = "read,write"
+    api_key_hash: str = ""
+    default_tenant_id: str = "default"
 
 
 settings = Settings()
