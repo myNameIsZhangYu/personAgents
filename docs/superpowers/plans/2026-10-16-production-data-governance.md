@@ -109,11 +109,11 @@
 - Consumes: audit records and settings.
 - Produces: `AuditRedactor.redact()`, settings `audit_retention_days`, `AuditLogger.purge_expired()`.
 
-- [ ] Redact email, phone, credit-card, bearer token, OpenAI-style key, and long secrets.
-- [ ] Apply redaction to input, output, and error fields while preserving status and IDs.
-- [ ] Add retention purge and index.
-- [ ] Add tests for redaction, retention cutoff, tenant/user preservation, and metrics-free output.
-- [ ] Commit.
+- [x] Redact email, phone, credit-card, bearer token, OpenAI-style key, and long secrets.
+- [x] Apply redaction to input, output, and error fields while preserving status and IDs.
+- [x] Add retention purge and index.
+- [x] Add tests for redaction, retention cutoff, tenant/user preservation, and metrics-free output.
+- [x] Commit.
 
 ### Task 6: Monitoring and Deployment Artifacts
 

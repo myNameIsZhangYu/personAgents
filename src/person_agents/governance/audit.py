@@ -1,12 +1,34 @@
+import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 
 import structlog
 
 from person_agents.config.settings import settings
 
 logger = structlog.get_logger()
+
+
+class AuditRedactor:
+    PATTERNS: ClassVar[list[re.Pattern[str]]] = [
+        re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
+        re.compile(r"\b(?:\+?\d[\s-]?){9,14}\d\b"),
+        re.compile(r"\b(?:\d[ -]?){13,19}\b"),
+        re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]+\b", re.IGNORECASE),
+        re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
+        re.compile(r"\b[A-Fa-f0-9]{32,}\b"),
+    ]
+
+    @classmethod
+    def redact(cls, value: str | None) -> str:
+        if not value:
+            return ""
+        result = value
+        for pattern in cls.PATTERNS:
+            result = pattern.sub("[REDACTED]", result)
+        return result[:2000]
 
 
 class AuditLogger:
@@ -52,6 +74,25 @@ class AuditLogger:
         conn = self.connect()
         conn.execute(
             "INSERT INTO audit_log (timestamp, agent, action, input, output, status, error, request_id, owner_user_id, tenant_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (datetime.now(UTC).isoformat(), agent, action, input_data, output_data, status, error, request_id, owner_user_id, tenant_id),
+            (
+                datetime.now(UTC).isoformat(),
+                agent,
+                action,
+                AuditRedactor.redact(input_data),
+                AuditRedactor.redact(output_data),
+                status,
+                AuditRedactor.redact(error),
+                request_id,
+                owner_user_id,
+                tenant_id,
+            ),
         )
         conn.commit()
+
+    def purge_expired(self, retention_days: int) -> int:
+        from datetime import timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        cursor = self.connect().execute("DELETE FROM audit_log WHERE timestamp < ?", (cutoff.isoformat(),))
+        self._conn.commit()
+        return cursor.rowcount

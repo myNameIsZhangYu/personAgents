@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     nextauth_secret: str = ""
     salt: str = ""
     encryption_key: str = ""
+    audit_retention_days: int = 90
 
 
 settings = Settings()

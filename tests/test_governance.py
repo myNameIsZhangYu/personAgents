@@ -5,6 +5,38 @@ from person_agents.governance.policy import Permission, PolicyEngine
 from person_agents.governance.rate_limiter import RateLimiter
 
 
+class TestAuditRedaction:
+    def test_redacts_sensitive_fields(self, tmp_path) -> None:
+        from person_agents.governance.audit import AuditLogger
+
+        logger = AuditLogger(tmp_path / "audit.db")
+        logger.record(
+            "middleware",
+            "test",
+            "contact user@example.com or 13800138000",
+            "bearer abcdefghijklmnopqrstuvwxyz123456",
+            error="card 4111111111111111",
+        )
+        row = logger.connect().execute("SELECT input,output,error FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
+        assert "user@example.com" not in row[0]
+        assert "13800138000" not in row[0]
+        assert "abcdefghijklmnopqrstuvwxyz123456" not in row[1]
+        assert "4111111111111111" not in row[2]
+        assert row[0].count("[REDACTED]") == 2
+
+    def test_retention_purge(self, tmp_path) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from person_agents.governance.audit import AuditLogger
+
+        logger = AuditLogger(tmp_path / "retention.db")
+        logger.record("middleware", "old")
+        old_timestamp = (datetime.now(UTC) - timedelta(days=91)).isoformat()
+        logger.connect().execute("UPDATE audit_log SET timestamp=?", (old_timestamp,))
+        logger._conn.commit()
+        assert logger.purge_expired(90) == 1
+
+
 class TestPolicyEngine:
     def test_read_allowed_by_default(self) -> None:
         engine = PolicyEngine()
