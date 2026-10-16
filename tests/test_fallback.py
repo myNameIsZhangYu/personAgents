@@ -15,7 +15,10 @@ class TestFallbackChain:
 
     def test_primary_success(self) -> None:
         import asyncio
-        with patch("person_agents.llm.fallback.call_llm", new_callable=AsyncMock) as mock:
+        with (
+            patch("person_agents.llm.fallback.settings.openai_api_key", "test-key"),
+            patch("person_agents.llm.fallback.call_llm", new_callable=AsyncMock) as mock,
+        ):
             mock.return_value = LLMResponse(content="ok", model="test", prompt_tokens=1, completion_tokens=1)
             resp = asyncio.run(call_with_fallback([{"role": "user", "content": "hi"}]))
             assert resp.content == "ok"
@@ -25,7 +28,10 @@ class TestFallbackChain:
     def test_fallback_on_error(self) -> None:
         import asyncio
         responses = [ConnectionError("fail"), LLMResponse(content="fallback", model="test", prompt_tokens=1, completion_tokens=1)]
-        with patch("person_agents.llm.fallback.call_llm", side_effect=responses):
+        with (
+            patch("person_agents.llm.fallback.settings.openai_api_key", "test-key"),
+            patch("person_agents.llm.fallback.call_llm", side_effect=responses),
+        ):
             resp = asyncio.run(call_with_fallback([{"role": "user", "content": "hi"}]))
             assert resp.content == "fallback"
             assert resp.degraded is True
