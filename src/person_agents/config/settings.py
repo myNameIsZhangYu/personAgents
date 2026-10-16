@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o"
 
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen2.5:7b"
 
     log_level: str = "INFO"
