@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS runs (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_runs_owner ON runs(tenant_id, owner_user_id, status);
+CREATE TABLE IF NOT EXISTS config_versions (
+    kind TEXT NOT NULL,
+    version_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY (kind, version_id)
+);
 """
 
 MIGRATIONS = [
@@ -84,7 +91,20 @@ class SQLiteStore:
                     self._conn.execute(migration)
                 except sqlite3.OperationalError:
                     pass
+            self.connect_registry()
         return self._conn
+
+    def connect_registry(self) -> None:
+        self.connect().execute(
+            """CREATE TABLE IF NOT EXISTS config_versions (
+                kind TEXT NOT NULL,
+                version_id TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                PRIMARY KEY (kind, version_id)
+            )"""
+        )
+        self._conn.commit()
 
     def close(self) -> None:
         if self._conn:
