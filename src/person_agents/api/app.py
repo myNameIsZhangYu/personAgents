@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from person_agents.api.schemas import Provenance, RunAcceptedResponse, RunRequest, RunResponse
 from person_agents.config.settings import settings
 from person_agents.governance.rate_limiter import QuotaExceededError, RateLimiter
+from person_agents.memory.postgres_store import PostgresStore
 from person_agents.memory.sqlite_store import SQLiteStore
 from person_agents.middleware import _confirmations
 from person_agents.runtime.jobs import JobManager
@@ -27,6 +28,7 @@ async def current_context(x_api_key: str | None = Header(default=None)) -> Reque
 
 _context_dependency = Depends(current_context)
 _store = SQLiteStore()
+_pg_store: PostgresStore | None = PostgresStore() if settings.postgres_dsn else None
 _jobs = JobManager(_store)
 _state_store = create_state_store(settings.redis_url)
 _rate_limiter = RateLimiter(
@@ -76,6 +78,12 @@ async def readyz() -> Response:
         dependencies["sqlite"] = "ok"
     except sqlite3.Error:
         dependencies["sqlite"] = "failed"
+    if _pg_store:
+        try:
+            await _pg_store.depth("queued")
+            dependencies["postgres"] = "ok"
+        except (OSError, RuntimeError):
+            dependencies["postgres"] = "failed"
     if settings.redis_url:
         try:
             _state_store.get_json("readyz")
@@ -173,7 +181,10 @@ async def create_async_run(
 
 @app.get("/runs/{run_id}", response_model=RunResponse)
 async def get_run(run_id: str, context: RequestContext = _context_dependency) -> RunResponse:
-    run = _jobs.get(run_id, context.user_id, context.tenant_id)
+    if _pg_store:
+        run = await _pg_store.get_run(run_id, context.user_id, context.tenant_id)
+    else:
+        run = _jobs.get(run_id, context.user_id, context.tenant_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return RunResponse(
@@ -192,7 +203,10 @@ async def get_run(run_id: str, context: RequestContext = _context_dependency) ->
 
 @app.post("/runs/{run_id}/cancel")
 async def cancel_run(run_id: str, context: RequestContext = _context_dependency) -> RunResponse:
-    run = _jobs.get(run_id, context.user_id, context.tenant_id)
+    if _pg_store:
+        run = await _pg_store.get_run(run_id, context.user_id, context.tenant_id)
+    else:
+        run = _jobs.get(run_id, context.user_id, context.tenant_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     if run["status"] not in ("queued", "running"):

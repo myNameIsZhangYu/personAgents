@@ -45,3 +45,11 @@ def test_postgres_store_run_operations(monkeypatch) -> None:
 
     asyncio.run(store.update_run("run", "u", "t", "completed", output="ok", total_tokens=10, total_cost=0.1))
     assert engine.connection.calls[1][1]["status"] == "completed"
+
+
+def test_postgres_selector_disabled_by_default() -> None:
+    from person_agents.api.app import _pg_store
+    from person_agents.config.settings import settings
+
+    if not settings.postgres_dsn:
+        assert _pg_store is None
