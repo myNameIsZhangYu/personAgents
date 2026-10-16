@@ -77,6 +77,7 @@ def _check_write(path) -> bool:
 @app.command()
 def eval(
     output: str = typer.Option("", help="Write the JSON evaluation report to this path."),
+    threshold: float = typer.Option(0.0, help="Fail when pass rate is below this threshold."),
 ) -> None:
     """Run the baseline LLM evaluation suite and print a JSON report."""
     setup_logging()
@@ -84,11 +85,20 @@ def eval(
     from person_agents.eval.runner import EvalRunner
 
     async def _eval():
-        report = await EvalRunner().run_all(BASELINE_CASES)
+        from person_agents.eval.storage import EvalStorage
+
+        runner = EvalRunner()
+        report = await runner.run_all(BASELINE_CASES)
         rendered = json.dumps(report, ensure_ascii=False, indent=2)
         console.print(rendered)
         if output:
             Path(output).write_text(rendered + "\n", encoding="utf-8")
+        if threshold > 0:
+            storage = EvalStorage()
+            storage.save_result(report, report.get("model", "unknown"))
+            if not storage.compare(threshold):
+                console.print(f"[red]Evaluation gate failed:[/red] {report['pass_rate']:.2f} < {threshold:.2f}")
+                raise typer.Exit(code=2)
 
     asyncio.run(_eval())
 

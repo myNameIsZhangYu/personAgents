@@ -21,3 +21,6 @@ jobs:
         run: uv run ruff check src tests
       - name: Tests
         run: uv run pytest -q
+      - name: Evaluation Gate (offline)
+        if: ${{ vars.RUN_EVAL_GATE == 'true' }}
+        run: uv run person-agents eval --threshold "${{ vars.EVAL_THRESHOLD || '0.7' }}"

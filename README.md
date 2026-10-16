@@ -286,6 +286,7 @@ uv run person-agents doctor --production
 - **数据持久化**：agent 数据、Langfuse 元数据、trace 与对象存储均使用 named volumes。
 - **监控告警**：`docker compose --profile monitoring up -d prometheus grafana` 启动 Prometheus 与 Grafana；Prometheus 配置位于 `deploy/prometheus/`，Grafana 仪表板自动挂载。
 - **评估**：`person-agents eval` 直接调用当前 fallback chain，并生成 JSON pass rate / token 报告。
+- **评估门禁**：`person-agents eval --threshold 0.7` 保存结果并执行阈值校验；CI 可通过 repository variable `RUN_EVAL_GATE=true` 启用。
 - **生产核心**：FastAPI、API key 认证、tenant/user 隔离、JSON Schema 工具校验、危险工具人工确认和 Docker 服务入口已接入。
 
 ### 生产部署检查

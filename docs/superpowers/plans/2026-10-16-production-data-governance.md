@@ -149,12 +149,12 @@
 - Consumes: `EvalRunner`, settings versions.
 - Produces: `EvalStorage.save_result()`, `.latest()`, `.compare(); CLI `person-agents eval --check-threshold`; CI optional eval gate.
 
-- [ ] Persist evaluation results with model, prompt version, pass rate, tokens, and timestamp.
-- [ ] Compare latest result against configured pass-rate threshold.
-- [ ] Fail CLI gate when threshold is not met.
-- [ ] Add CI workflow option using a seeded offline eval stub or scheduled real evaluation job.
-- [ ] Add tests for storage, comparison, threshold failure, and version metadata.
-- [ ] Commit.
+- [x] Persist evaluation results with model, prompt version, pass rate, tokens, and timestamp.
+- [x] Compare latest result against configured pass-rate threshold.
+- [x] Fail CLI gate when threshold is not met.
+- [x] Add CI workflow option using a seeded offline eval stub or scheduled real evaluation job.
+- [x] Add tests for storage, comparison, threshold failure, and version metadata.
+- [x] Commit.
 
 ### Task 8: Final Verification
 
@@ -162,7 +162,7 @@
 - Modify: `README.md`
 - Modify: plan checkboxes
 
-- [ ] Run full pytest, ruff, lock, and compose validation.
-- [ ] Verify credential lifecycle, config registry, quota enforcement, production validation, audit redaction, monitoring config, and eval gate.
-- [ ] Push and confirm CI green.
-- [ ] Mark all plan checkboxes completed.
+- [x] Run full pytest, ruff, lock, and compose validation.
+- [x] Verify credential lifecycle, config registry, quota enforcement, production validation, audit redaction, monitoring config, and eval gate.
+- [x] Push and confirm CI green.
+- [x] Mark all plan checkboxes completed.

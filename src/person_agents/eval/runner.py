@@ -42,4 +42,5 @@ class EvalRunner:
             "pass_rate": passed / total if total else 0,
             "total_tokens": self.tracker.total_tokens,
             "results": results,
+            "model": results[0].get("model", "unknown") if results else "unknown",
         }
