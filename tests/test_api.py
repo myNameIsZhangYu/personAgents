@@ -51,6 +51,7 @@ async def test_async_run_and_cancel(monkeypatch, tmp_path) -> None:
     from person_agents.memory.sqlite_store import SQLiteStore
 
     _jobs.store = SQLiteStore(db_path=tmp_path / "cancel.db")
+    _jobs.registry.store = _jobs.store
     async with await api_client(monkeypatch) as api:
         accepted = await api.post("/runs/async", json={"prompt": "hello"}, headers={"X-API-Key": "test-key"})
         assert accepted.status_code == 202

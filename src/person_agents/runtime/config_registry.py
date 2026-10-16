@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from person_agents.config.settings import settings
+from person_agents.memory.sqlite_store import SQLiteStore
 
 
 @dataclass
@@ -15,24 +16,11 @@ class ConfigVersion:
 
 
 class ConfigRegistry:
-    def __init__(self, db_path: Path | None = None):
-        self.db_path = db_path or settings.sqlite_path
-        self._conn: sqlite3.Connection | None = None
+    def __init__(self, store: SQLiteStore | None = None, db_path: Path | None = None):
+        self.store = store or SQLiteStore(db_path)
 
     def connect(self) -> sqlite3.Connection:
-        if self._conn is None:
-            self._conn = sqlite3.connect(str(self.db_path))
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.execute(
-                """CREATE TABLE IF NOT EXISTS config_versions (
-                    kind TEXT NOT NULL,
-                    version_id TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (kind, version_id)
-                )"""
-            )
-        return self._conn
+        return self.store.connect()
 
     @staticmethod
     def version_id(content: str) -> str:
@@ -44,7 +32,7 @@ class ConfigRegistry:
             "INSERT OR IGNORE INTO config_versions (kind,version_id,content) VALUES (?,?,?)",
             (kind, version_id, content),
         )
-        self._conn.commit()
+        self.store.connect().commit()
         return ConfigVersion(kind, version_id, content)
 
     def get(self, kind: str, version_id: str) -> ConfigVersion | None:

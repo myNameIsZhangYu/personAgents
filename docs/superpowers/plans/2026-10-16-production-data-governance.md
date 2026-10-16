@@ -53,12 +53,12 @@
 - Consumes: `SQLiteStore`, settings.
 - Produces: `ConfigRegistry.register()`, `.get()`, `.latest()`; run metadata contains actual prompt/tool/policy snapshot IDs.
 
-- [ ] Add immutable version table for prompt, tool, and policy configs.
-- [ ] Implement content-addressed version IDs using SHA-256.
-- [ ] Register current defaults at store initialization.
-- [ ] Persist registry version IDs on run creation.
-- [ ] Add tests for immutability, deduplication, latest lookup, and run linkage.
-- [ ] Commit.
+- [x] Add immutable version table for prompt, tool, and policy configs.
+- [x] Implement content-addressed version IDs using SHA-256.
+- [x] Register current defaults at store initialization.
+- [x] Persist registry version IDs on run creation.
+- [x] Add tests for immutability, deduplication, latest lookup, and run linkage.
+- [x] Commit.
 
 ### Task 3: Cost and Token Quota Enforcement
 
