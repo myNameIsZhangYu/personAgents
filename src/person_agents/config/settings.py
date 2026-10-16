@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     api_key_hash: str = ""
     default_tenant_id: str = "default"
     redis_url: str = ""
+    postgres_dsn: str = ""
+    postgres_pool_size: int = 5
+    postgres_max_overflow: int = 10
+    admin_api_key_hash: str = ""
     tenant_max_running_runs: int = 3
     tenant_daily_run_limit: int = 1000
     tenant_daily_token_limit: int = 1_000_000

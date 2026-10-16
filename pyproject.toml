@@ -18,6 +18,8 @@ dependencies = [
     "uvicorn>=0.54.0",
     "redis>=8.1.0",
     "prometheus-client>=0.26.0",
+    "sqlalchemy>=2.1.4",
+    "asyncpg>=0.32.0",
 ]
 
 [project.optional-dependencies]
