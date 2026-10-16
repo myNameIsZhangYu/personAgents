@@ -96,11 +96,11 @@
 - Consumes: PostgreSQL settings and app health.
 - Produces: `postgres` profile service, healthcheck, volume, and operational documentation.
 
-- [ ] Add PostgreSQL 16 profile service.
-- [ ] Configure resource limits and health checks.
-- [ ] Document startup, backup, rollback, and SQLite-to-PostgreSQL caveats.
-- [ ] Verify compose configuration.
-- [ ] Commit.
+- [x] Add PostgreSQL 16 profile service.
+- [x] Configure resource limits and health checks.
+- [x] Document startup, backup, rollback, and SQLite-to-PostgreSQL caveats.
+- [x] Verify compose configuration.
+- [x] Commit.
 
 ### Task 6: Administrative Credential APIs
 

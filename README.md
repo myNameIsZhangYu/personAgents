@@ -274,6 +274,17 @@ uv run person-agents doctor --production
 
 该命令校验 API key、Redis、LLM、Langfuse、secret 长度、重复值和默认凭据；任何失败都会以 exit code 2 退出。
 
+### PostgreSQL profile
+
+当前 API 读路径与 `/readyz` 支持通过 `PERSON_AGENTS_POSTGRES_DSN=postgresql+asyncpg://user:password@postgres:5432/person_agents` 启用 PostgreSQL。启动数据库：
+
+```bash
+POSTGRES_USER=person_agents POSTGRES_PASSWORD=strong-password POSTGRES_DB=person_agents \
+  docker compose --profile postgres up -d postgres
+```
+
+注意：worker lease、审计、credentials、config registry 仍使用 SQLite；完整 PostgreSQL 化将在下一阶段完成。
+
 危险工具会返回 `status=confirmation_required` 和一次性 `confirmation_token`。当前 API 核心已实现认证、租户上下文、用户隔离、schema 校验、确认工作流和 `/healthz`；批准/拒绝 endpoint 仍在下一批实现中。
 
 - **租户配额**：默认最多 3 个并发 Run、1000 个每日 Run；可通过 `PERSON_AGENTS_TENANT_*` 环境变量调整。

@@ -180,6 +180,27 @@ services:
     depends_on:
       - prometheus
 
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
   langfuse:
     image: langfuse/langfuse:latest
     ports:
@@ -224,6 +245,7 @@ volumes:
   app_data:
   redis_data:
   grafana_data:
+  postgres_data:
   langfuse_pg_data:
   langfuse_ch_data:
   langfuse_s3_data:
