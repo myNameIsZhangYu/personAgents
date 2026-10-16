@@ -115,15 +115,15 @@
 - Consumes: `CredentialManager`, admin API key.
 - Produces: admin-only create/revoke/rotate endpoints returning plaintext exactly once.
 
-- [ ] Add admin identity check and separate admin key setting.
-- [ ] Add credential create/revoke/rotate endpoints.
-- [ ] Return plaintext only on create/rotate responses.
-- [ ] Add tests for authorization, lifecycle, and absence of key leakage.
-- [ ] Commit.
+- [x] Add admin identity check and separate admin key setting.
+- [x] Add credential create/revoke/rotate endpoints.
+- [x] Return plaintext only on create/rotate responses.
+- [x] Add tests for authorization, lifecycle, and absence of key leakage.
+- [x] Commit.
 
 ### Task 7: Final Verification
 
-- [ ] Run pytest, ruff, lock check, and compose config.
-- [ ] Verify SQLite fallback, PostgreSQL selector, admin APIs, and documentation.
-- [ ] Push and confirm CI green.
-- [ ] Mark all plan checkboxes completed.
+- [x] Run pytest, ruff, lock check, and compose config.
+- [x] Verify SQLite fallback, PostgreSQL selector, admin APIs, and documentation.
+- [x] Push and confirm CI green.
+- [x] Mark all plan checkboxes completed.

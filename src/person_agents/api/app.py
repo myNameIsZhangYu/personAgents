@@ -5,6 +5,7 @@ import time
 import redis
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 
+from person_agents.api.admin import router as admin_router
 from person_agents.api.schemas import Provenance, RunAcceptedResponse, RunRequest, RunResponse
 from person_agents.config.settings import settings
 from person_agents.governance.rate_limiter import QuotaExceededError, RateLimiter
@@ -17,6 +18,7 @@ from person_agents.security.auth import SecurityError, resolve_request_context
 from person_agents.security.context import RequestContext
 
 app = FastAPI(title="person-agents", version="0.1.0")
+app.include_router(admin_router)
 
 
 async def current_context(x_api_key: str | None = Header(default=None)) -> RequestContext:

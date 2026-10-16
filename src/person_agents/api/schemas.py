@@ -25,3 +25,16 @@ class RunAcceptedResponse(BaseModel):
     run_id: str
     status: str
     session_id: str
+
+
+class CredentialResponse(BaseModel):
+    key_id: str
+    plaintext: str
+
+
+class CredentialRotateRequest(BaseModel):
+    key_id: str
+
+
+class CredentialRevokeRequest(BaseModel):
+    key_id: str
