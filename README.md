@@ -212,7 +212,7 @@ src/person_agents/
 | langfuse-clickhouse | 8123/9000 | ClickHouse（trace 存储） |
 | langfuse-minio (SeaweedFS) | 9000 | S3 兼容对象存储 |
 | langfuse-redis | 6379 | 队列（BullMQ） |
-| langfuse-worker | — | 后台任务处理 |
+| langfuse-worker | — | Langfuse 后台任务处理 |
 
 ## 技术栈
 
@@ -239,15 +239,22 @@ curl -X POST http://localhost:8000/runs/async -H 'X-API-Key: your-key' -H 'Conte
 curl http://localhost:8000/runs/<run_id> -H 'X-API-Key: your-key'
 ```
 
-Run 状态包括 `queued`、`running`、`completed`、`failed`、`awaiting_confirmation`。`person-agents worker` 负责消费任务；配置 `PERSON_AGENTS_REDIS_URL` 后，confirmation 和限流状态跨进程共享。
+Run 状态包括 `queued`、`running`、`completed`、`failed`、`awaiting_confirmation`、`dead_letter`。`person-agents worker` 使用 lease 消费任务，执行失败会按指数退避重试；超过 `PERSON_AGENTS_RUN_MAX_ATTEMPTS` 后进入 `dead_letter`。配置 `PERSON_AGENTS_REDIS_URL` 后，confirmation、限流和租户配额状态跨进程共享。
 
 `/metrics` 暴露 Prometheus 指标：
 
 - `http_requests_total`
 - `http_request_duration_seconds`
 - `run_jobs_total`
+- `run_attempts_total`
+- `run_dead_letter_total`
 - `tool_calls_total`
 - `llm_calls_total`
+- `sqlite_queue_depth`
+- `sqlite_running_jobs`
+- `sqlite_dead_letter_jobs`
+
+`/readyz` 检查 SQLite；配置 Redis 后同时检查 Redis。该 endpoint 只暴露依赖状态和队列 gauge，不暴露 prompt、output 或密钥。
 
 `POST /runs` 使用 `X-API-Key` 认证。`API_KEY_HASH` 保存的是 API key 的 SHA-256：
 
@@ -261,6 +268,8 @@ curl -X POST http://localhost:8000/runs \
 
 危险工具会返回 `status=confirmation_required` 和一次性 `confirmation_token`。当前 API 核心已实现认证、租户上下文、用户隔离、schema 校验、确认工作流和 `/healthz`；批准/拒绝 endpoint 仍在下一批实现中。
 
+- **租户配额**：默认最多 3 个并发 Run、1000 个每日 Run；可通过 `PERSON_AGENTS_TENANT_*` 环境变量调整。
+- **运行溯源**：每个 Run 记录 agent、prompt、工具配置和策略版本，并通过 run response 的 `provenance` 返回。
 
 - **应用镜像**：`Dockerfile.app` 使用非 root 运行时和独立数据卷。
 - **CI**：`.github/workflows/ci.yml` 在 push/PR 时执行 `ruff check` 和 `pytest`。
@@ -269,6 +278,15 @@ curl -X POST http://localhost:8000/runs \
 - **数据持久化**：agent 数据、Langfuse 元数据、trace 与对象存储均使用 named volumes。
 - **评估**：`person-agents eval` 直接调用当前 fallback chain，并生成 JSON pass rate / token 报告。
 - **生产核心**：FastAPI、API key 认证、tenant/user 隔离、JSON Schema 工具校验、危险工具人工确认和 Docker 服务入口已接入。
+
+### 生产部署检查
+
+1. 生成强随机 API key，只保存 SHA-256 到 `PERSON_AGENTS_API_KEY_HASH`。
+2. 必须配置 `PERSON_AGENTS_REDIS_URL`，生产环境依赖 Redis 保存跨进程状态。
+3. 使用强随机凭据替换 Langfuse 示例配置；不要将真实 secret 提交到仓库。
+4. 定期备份 `app_data`（SQLite / Chroma / workspace）和 `redis_data`；恢复前先停止 app 与 worker。
+5. 观察 `/readyz`、`/metrics`、`sqlite_dead_letter_jobs` 与 `run_dead_letter_total`。
+6. 升级时先停止 worker，等待 `running` 任务清空，再替换镜像并重启服务。
 
 ## License
 

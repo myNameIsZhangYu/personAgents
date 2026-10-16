@@ -1,5 +1,6 @@
 import uuid
 
+from person_agents.config.settings import settings
 from person_agents.memory.sqlite_store import SQLiteStore
 
 
@@ -7,9 +8,9 @@ class JobManager:
     def __init__(self, store: SQLiteStore) -> None:
         self.store = store
 
-    def create(self, prompt: str, owner_user_id: str, tenant_id: str, session_id: str) -> str:
+    def create(self, prompt: str, owner_user_id: str, tenant_id: str, session_id: str, provenance: dict[str, str] | None = None) -> str:
         run_id = str(uuid.uuid4())
-        self.store.create_run(run_id, prompt, owner_user_id, tenant_id, session_id)
+        self.store.create_run(run_id, prompt, owner_user_id, tenant_id, session_id, provenance=provenance)
         return run_id
 
     def get(self, run_id: str, owner_user_id: str, tenant_id: str) -> dict | None:
@@ -20,3 +21,17 @@ class JobManager:
 
     def next(self) -> dict | None:
         return self.store.next_queued_run()
+
+    def claim_next(self, worker_id: str, lease_seconds: int = 60) -> dict | None:
+        return self.store.claim_next_run(worker_id, lease_seconds)
+
+    def renew_lease(self, run_id: str, worker_id: str, lease_seconds: int = 60) -> bool:
+        return self.store.renew_run_lease(run_id, worker_id, lease_seconds)
+
+    def default_provenance(self) -> dict[str, str]:
+        return {
+            "agent_version": settings.agent_version,
+            "prompt_version": settings.prompt_version,
+            "tool_config_version": settings.tool_config_version,
+            "policy_version": settings.policy_version,
+        }

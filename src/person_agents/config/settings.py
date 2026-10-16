@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     api_key_hash: str = ""
     default_tenant_id: str = "default"
     redis_url: str = ""
+    tenant_max_running_runs: int = 3
+    tenant_daily_run_limit: int = 1000
+    tenant_daily_token_limit: int = 1_000_000
+    tenant_daily_cost_limit: float = 10.0
+    run_max_attempts: int = 3
+    run_retry_backoff_seconds: int = 30
+    agent_version: str = "0.1.0"
+    prompt_version: str = "default-v1"
+    tool_config_version: str = "default-v1"
+    policy_version: str = "default-v1"
 
 
 settings = Settings()

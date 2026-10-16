@@ -13,6 +13,12 @@ services:
       LANGFUSE_HOST: http://langfuse:3000
     volumes:
       - app_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     ports:
       - "8000:8000"
     depends_on:
@@ -36,12 +42,22 @@ services:
       PERSON_AGENTS_REDIS_URL: redis://redis:6379/0
     volumes:
       - app_data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
     depends_on:
       redis:
         condition: service_healthy
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -183,6 +199,7 @@ services:
 
 volumes:
   app_data:
+  redis_data:
   langfuse_pg_data:
   langfuse_ch_data:
   langfuse_s3_data:

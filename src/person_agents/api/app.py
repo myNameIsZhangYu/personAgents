@@ -1,10 +1,13 @@
 import asyncio
+import sqlite3
 import time
 
+import redis
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 
-from person_agents.api.schemas import RunAcceptedResponse, RunRequest, RunResponse
+from person_agents.api.schemas import Provenance, RunAcceptedResponse, RunRequest, RunResponse
 from person_agents.config.settings import settings
+from person_agents.governance.rate_limiter import QuotaExceededError, RateLimiter
 from person_agents.memory.sqlite_store import SQLiteStore
 from person_agents.middleware import _confirmations
 from person_agents.runtime.jobs import JobManager
@@ -26,6 +29,11 @@ _context_dependency = Depends(current_context)
 _store = SQLiteStore()
 _jobs = JobManager(_store)
 _state_store = create_state_store(settings.redis_url)
+_rate_limiter = RateLimiter(
+    _state_store,
+    max_running_runs=settings.tenant_max_running_runs,
+    daily_run_limit=settings.tenant_daily_run_limit,
+)
 
 
 @app.middleware("http")
@@ -47,6 +55,36 @@ async def metrics_middleware(request, call_next):
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readyz() -> Response:
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    from person_agents.observability.metrics import (
+        registry,
+        sqlite_dead_letter_jobs,
+        sqlite_queue_depth,
+        sqlite_running_jobs,
+    )
+
+    dependencies: dict[str, str] = {}
+    try:
+        sqlite_queue_depth.set(_store.queue_depth())
+        sqlite_running_jobs.set(_store.running_depth())
+        sqlite_dead_letter_jobs.set(_store.dead_letter_depth())
+        dependencies["sqlite"] = "ok"
+    except sqlite3.Error:
+        dependencies["sqlite"] = "failed"
+    if settings.redis_url:
+        try:
+            _state_store.get_json("readyz")
+            dependencies["redis"] = "ok"
+        except redis.RedisError:
+            dependencies["redis"] = "failed"
+    healthy = all(status == "ok" for status in dependencies.values())
+    body = generate_latest(registry) + f"\nreadyz_dependencies{dependencies}\n".encode()
+    return Response(content=body, media_type=CONTENT_TYPE_LATEST, status_code=200 if healthy else 503)
 
 
 @app.get("/metrics")
@@ -84,12 +122,19 @@ async def create_run(
     session_id = request.session_id or context.session_id
     scoped_context = RequestContext(user_id=context.user_id, tenant_id=context.tenant_id, session_id=session_id)
     try:
+        _rate_limiter.check_usage(context.user_id, context.tenant_id)
+        slot_id = _rate_limiter.allow_run(context.user_id, context.tenant_id)
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    try:
         result = await asyncio.wait_for(
             run_graph(request.prompt, session_id=session_id, context=scoped_context),
             timeout=120,
         )
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail="Agent run timed out") from exc
+    finally:
+        _rate_limiter.release_run_slot(slot_id, context.user_id, context.tenant_id)
 
     tool_results = result.get("tool_results", [])
     output = tool_results[-1].get("output") if tool_results else None
@@ -108,7 +153,21 @@ async def create_async_run(
     context: RequestContext = _context_dependency,
 ) -> RunAcceptedResponse:
     session_id = request.session_id or context.session_id
-    run_id = _jobs.create(request.prompt, context.user_id, context.tenant_id, session_id)
+    try:
+        _rate_limiter.check_usage(context.user_id, context.tenant_id)
+        _rate_limiter.allow_run(context.user_id, context.tenant_id)
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    slot_id = None
+    try:
+        _rate_limiter.check_usage(context.user_id, context.tenant_id)
+        slot_id = _rate_limiter.allow_run(context.user_id, context.tenant_id)
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    finally:
+        if slot_id:
+            _rate_limiter.release_run_slot(slot_id, context.user_id, context.tenant_id)
+    run_id = _jobs.create(request.prompt, context.user_id, context.tenant_id, session_id, _jobs.default_provenance())
     return RunAcceptedResponse(run_id=run_id, status="queued", session_id=session_id)
 
 
@@ -122,6 +181,12 @@ async def get_run(run_id: str, context: RequestContext = _context_dependency) ->
         status=run["status"],
         output=run["output"],
         confirmation_token=run["confirmation_token"],
+        provenance=Provenance(
+            agent_version=run.get("agent_version") or settings.agent_version,
+            prompt_version=run.get("prompt_version") or settings.prompt_version,
+            tool_config_version=run.get("tool_config_version") or settings.tool_config_version,
+            policy_version=run.get("policy_version") or settings.policy_version,
+        ),
     )
 
 

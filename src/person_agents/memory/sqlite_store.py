@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -38,11 +39,32 @@ CREATE TABLE IF NOT EXISTS runs (
     output TEXT,
     confirmation_token TEXT,
     error TEXT,
+    lease_owner TEXT,
+    lease_expires_at TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TEXT,
+    agent_version TEXT,
+    prompt_version TEXT,
+    tool_config_version TEXT,
+    policy_version TEXT,
+    metadata_json TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_runs_owner ON runs(tenant_id, owner_user_id, status);
 """
+
+MIGRATIONS = [
+    "ALTER TABLE runs ADD COLUMN lease_owner TEXT",
+    "ALTER TABLE runs ADD COLUMN lease_expires_at TEXT",
+    "ALTER TABLE runs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE runs ADD COLUMN next_retry_at TEXT",
+    "ALTER TABLE runs ADD COLUMN agent_version TEXT",
+    "ALTER TABLE runs ADD COLUMN prompt_version TEXT",
+    "ALTER TABLE runs ADD COLUMN tool_config_version TEXT",
+    "ALTER TABLE runs ADD COLUMN policy_version TEXT",
+    "ALTER TABLE runs ADD COLUMN metadata_json TEXT",
+]
 
 
 class SQLiteStore:
@@ -57,6 +79,11 @@ class SQLiteStore:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.executescript(SCHEMA)
+            for migration in MIGRATIONS:
+                try:
+                    self._conn.execute(migration)
+                except sqlite3.OperationalError:
+                    pass
         return self._conn
 
     def close(self) -> None:
@@ -115,11 +142,36 @@ class SQLiteStore:
         conn.execute("UPDATE sessions SET ended_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), total_tokens=? WHERE session_id=?", (total_tokens, session_id))
         conn.commit()
 
-    def create_run(self, run_id: str, prompt: str, owner_user_id: str, tenant_id: str, session_id: str, status: str = "queued") -> None:
+    def create_run(
+        self,
+        run_id: str,
+        prompt: str,
+        owner_user_id: str,
+        tenant_id: str,
+        session_id: str,
+        status: str = "queued",
+        provenance: dict[str, str] | None = None,
+    ) -> None:
         conn = self.connect()
+        provenance = provenance or {}
         conn.execute(
-            "INSERT INTO runs (run_id, tenant_id, owner_user_id, session_id, prompt, status) VALUES (?,?,?,?,?,?)",
-            (run_id, tenant_id, owner_user_id, session_id, prompt, status),
+            """INSERT INTO runs (
+                run_id, tenant_id, owner_user_id, session_id, prompt, status,
+                agent_version, prompt_version, tool_config_version, policy_version, metadata_json
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                run_id,
+                tenant_id,
+                owner_user_id,
+                session_id,
+                prompt,
+                status,
+                provenance.get("agent_version"),
+                provenance.get("prompt_version"),
+                provenance.get("tool_config_version"),
+                provenance.get("policy_version"),
+                provenance.get("metadata_json"),
+            ),
         )
         conn.commit()
 
@@ -135,13 +187,60 @@ class SQLiteStore:
     def get_run(self, run_id: str, owner_user_id: str, tenant_id: str) -> dict[str, Any] | None:
         conn = self.connect()
         row = conn.execute(
-            "SELECT run_id, tenant_id, owner_user_id, session_id, prompt, status, output, confirmation_token, error, created_at, updated_at FROM runs WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
+            "SELECT run_id, tenant_id, owner_user_id, session_id, prompt, status, output, confirmation_token, error, created_at, updated_at, attempts, agent_version, prompt_version, tool_config_version, policy_version, metadata_json FROM runs WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
             (run_id, owner_user_id, tenant_id),
         ).fetchone()
         if row is None:
             return None
-        columns = ["run_id", "tenant_id", "owner_user_id", "session_id", "prompt", "status", "output", "confirmation_token", "error", "created_at", "updated_at"]
+        columns = ["run_id", "tenant_id", "owner_user_id", "session_id", "prompt", "status", "output", "confirmation_token", "error", "created_at", "updated_at", "attempts", "agent_version", "prompt_version", "tool_config_version", "policy_version", "metadata_json"]
         return dict(zip(columns, row))
+
+    def claim_next_run(self, worker_id: str, lease_seconds: int = 60) -> dict[str, Any] | None:
+        conn = self.connect()
+        now = datetime.now(UTC)
+        conn.execute(
+            """UPDATE runs SET status='queued', lease_owner=NULL, lease_expires_at=NULL
+               WHERE status='running' AND lease_expires_at IS NOT NULL AND datetime(lease_expires_at) < datetime(?)""",
+            (now.isoformat(),),
+        )
+        conn.commit()
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """SELECT run_id, tenant_id, owner_user_id, session_id, prompt, attempts FROM runs
+               WHERE status='queued' AND (next_retry_at IS NULL OR datetime(next_retry_at) <= datetime(?))
+               ORDER BY created_at LIMIT 1""",
+            (now.isoformat(),),
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        run_id, tenant_id, owner_user_id, session_id, prompt, attempts = row
+        expires = now + timedelta(seconds=lease_seconds)
+        conn.execute(
+            "UPDATE runs SET status='running', lease_owner=?, lease_expires_at=?, attempts=attempts+1 WHERE run_id=?",
+            (worker_id, expires.isoformat(), run_id),
+        )
+        conn.commit()
+        return {"run_id": run_id, "tenant_id": tenant_id, "owner_user_id": owner_user_id, "session_id": session_id, "prompt": prompt, "attempts": attempts + 1}
+
+    def renew_run_lease(self, run_id: str, worker_id: str, lease_seconds: int = 60) -> bool:
+        conn = self.connect()
+        expires = datetime.now(UTC) + timedelta(seconds=lease_seconds)
+        cursor = conn.execute(
+            "UPDATE runs SET lease_expires_at=? WHERE run_id=? AND lease_owner=? AND status='running'",
+            (expires.isoformat(), run_id, worker_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def queue_depth(self) -> int:
+        return int(self.connect().execute("SELECT count(*) FROM runs WHERE status='queued'").fetchone()[0])
+
+    def running_depth(self) -> int:
+        return int(self.connect().execute("SELECT count(*) FROM runs WHERE status='running'").fetchone()[0])
+
+    def dead_letter_depth(self) -> int:
+        return int(self.connect().execute("SELECT count(*) FROM runs WHERE status='dead_letter'").fetchone()[0])
 
     def next_queued_run(self) -> dict[str, Any] | None:
         conn = self.connect()

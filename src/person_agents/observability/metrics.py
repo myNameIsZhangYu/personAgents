@@ -1,5 +1,5 @@
 
-from prometheus_client import CollectorRegistry, Counter, Histogram
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 registry = CollectorRegistry()
 
@@ -33,3 +33,7 @@ llm_calls_total = Counter(
     ["status", "degraded"],
     registry=registry,
 )
+
+sqlite_queue_depth = Gauge("sqlite_queue_depth", "Queued SQLite jobs", registry=registry)
+sqlite_running_jobs = Gauge("sqlite_running_jobs", "Running SQLite jobs", registry=registry)
+sqlite_dead_letter_jobs = Gauge("sqlite_dead_letter_jobs", "Dead-letter SQLite jobs", registry=registry)
