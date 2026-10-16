@@ -266,6 +266,14 @@ curl -X POST http://localhost:8000/runs \
   -d '{"prompt":"What is 2+2?"}'
 ```
 
+### 生产配置校验
+
+```bash
+uv run person-agents doctor --production
+```
+
+该命令校验 API key、Redis、LLM、Langfuse、secret 长度、重复值和默认凭据；任何失败都会以 exit code 2 退出。
+
 危险工具会返回 `status=confirmation_required` 和一次性 `confirmation_token`。当前 API 核心已实现认证、租户上下文、用户隔离、schema 校验、确认工作流和 `/healthz`；批准/拒绝 endpoint 仍在下一批实现中。
 
 - **租户配额**：默认最多 3 个并发 Run、1000 个每日 Run；可通过 `PERSON_AGENTS_TENANT_*` 环境变量调整。
@@ -276,6 +284,7 @@ curl -X POST http://localhost:8000/runs \
 - **治理配置**：通过 `PERSON_AGENTS_GRANTED_PERMISSIONS=read,write` 控制默认权限；生产环境不应直接授予 `shell`。
 - **沙箱**：shell 工具使用一次性容器，默认禁网并限制 CPU / 内存。
 - **数据持久化**：agent 数据、Langfuse 元数据、trace 与对象存储均使用 named volumes。
+- **监控告警**：`docker compose --profile monitoring up -d prometheus grafana` 启动 Prometheus 与 Grafana；Prometheus 配置位于 `deploy/prometheus/`，Grafana 仪表板自动挂载。
 - **评估**：`person-agents eval` 直接调用当前 fallback chain，并生成 JSON pass rate / token 报告。
 - **生产核心**：FastAPI、API key 认证、tenant/user 隔离、JSON Schema 工具校验、危险工具人工确认和 Docker 服务入口已接入。
 

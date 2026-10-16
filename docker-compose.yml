@@ -157,6 +157,29 @@ services:
       REDIS_PORT: "6379"
       LANGFUSE_MIGRATION_V4_WRITE_MODE: dual
 
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["monitoring"]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
   langfuse:
     image: langfuse/langfuse:latest
     ports:
@@ -200,6 +223,7 @@ services:
 volumes:
   app_data:
   redis_data:
+  grafana_data:
   langfuse_pg_data:
   langfuse_ch_data:
   langfuse_s3_data:

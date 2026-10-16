@@ -129,12 +129,12 @@
 - Consumes: `/metrics`, `/readyz`, worker gauges.
 - Produces: Prometheus scrape/alerts and Grafana dashboard provisioning.
 
-- [ ] Add alert rules for API error rate, readiness, queue depth, dead-letter, worker availability, and Redis availability.
-- [ ] Add Grafana dashboard panels for throughput, latency, errors, queue, dead-letter, fallback, tools, and LLM calls.
-- [ ] Add profile-gated monitoring services.
-- [ ] Document startup, alert meanings, and rollback basics.
-- [ ] Verify compose and JSON/YAML artifacts.
-- [ ] Commit.
+- [x] Add alert rules for API error rate, readiness, queue depth, dead-letter, worker availability, and Redis availability.
+- [x] Add Grafana dashboard panels for throughput, latency, errors, queue, dead-letter, fallback, tools, and LLM calls.
+- [x] Add profile-gated monitoring services.
+- [x] Document startup, alert meanings, and rollback basics.
+- [x] Verify compose and JSON/YAML artifacts.
+- [x] Commit.
 
 ### Task 7: CI Evaluation Gate
 

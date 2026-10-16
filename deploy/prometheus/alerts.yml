@@ -1,0 +1,26 @@
+groups:
+  - name: person-agents
+    rules:
+      - alert: PersonAgentsDown
+        expr: up{job="person-agents"} == 0
+        for: 1m
+        labels:
+          severity: critical
+      - alert: PersonAgentsHighErrorRate
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+      - alert: PersonAgentsQueueBacklog
+        expr: sqlite_queue_depth > 20
+        for: 5m
+        labels:
+          severity: warning
+      - alert: PersonAgentsDeadLetter
+        expr: increase(sqlite_dead_letter_jobs[15m]) > 0
+        labels:
+          severity: warning
+      - alert: PersonAgentsLLMFallback
+        expr: increase(llm_calls_total{degraded="true"}[10m]) > 0
+        labels:
+          severity: warning

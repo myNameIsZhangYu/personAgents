@@ -1,0 +1,12 @@
+{
+  "title": "person-agents",
+  "uid": "person-agents",
+  "schemaVersion": 39,
+  "panels": [
+    {"type": "stat", "title": "Queue Depth", "targets": [{"expr": "sqlite_queue_depth"}]},
+    {"type": "stat", "title": "Dead Letter", "targets": [{"expr": "sqlite_dead_letter_jobs"}]},
+    {"type": "timeseries", "title": "HTTP Rate", "targets": [{"expr": "sum(rate(http_requests_total[5m])) by (status_code)"}]},
+    {"type": "timeseries", "title": "LLM Calls", "targets": [{"expr": "sum(increase(llm_calls_total[5m])) by (status,degraded)"}]},
+    {"type": "timeseries", "title": "Tool Calls", "targets": [{"expr": "sum(increase(tool_calls_total[5m])) by (tool,status)"}]}
+  ]
+}
