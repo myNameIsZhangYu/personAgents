@@ -232,6 +232,23 @@ src/person_agents/
 
 ### API 服务
 
+异步运行：
+
+```bash
+curl -X POST http://localhost:8000/runs/async -H 'X-API-Key: your-key' -H 'Content-Type: application/json' -d '{"prompt":"What is 2+2?"}'
+curl http://localhost:8000/runs/<run_id> -H 'X-API-Key: your-key'
+```
+
+Run 状态包括 `queued`、`running`、`completed`、`failed`、`awaiting_confirmation`。`person-agents worker` 负责消费任务；配置 `PERSON_AGENTS_REDIS_URL` 后，confirmation 和限流状态跨进程共享。
+
+`/metrics` 暴露 Prometheus 指标：
+
+- `http_requests_total`
+- `http_request_duration_seconds`
+- `run_jobs_total`
+- `tool_calls_total`
+- `llm_calls_total`
+
 `POST /runs` 使用 `X-API-Key` 认证。`API_KEY_HASH` 保存的是 API key 的 SHA-256：
 
 ```bash

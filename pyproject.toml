@@ -16,6 +16,8 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "fastapi>=0.143.2",
     "uvicorn>=0.54.0",
+    "redis>=8.1.0",
+    "prometheus-client>=0.26.0",
 ]
 
 [project.optional-dependencies]

@@ -11,3 +11,9 @@ class RunResponse(BaseModel):
     status: str
     output: str | None = None
     confirmation_token: str | None = None
+
+
+class RunAcceptedResponse(BaseModel):
+    run_id: str
+    status: str
+    session_id: str

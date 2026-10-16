@@ -28,6 +28,20 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_owner_key ON memories(tenant_id, owner_user_id, key);
+CREATE TABLE IF NOT EXISTS runs (
+    run_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    owner_user_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    status TEXT NOT NULL,
+    output TEXT,
+    confirmation_token TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_runs_owner ON runs(tenant_id, owner_user_id, status);
 """
 
 
@@ -100,3 +114,41 @@ class SQLiteStore:
         conn = self.connect()
         conn.execute("UPDATE sessions SET ended_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), total_tokens=? WHERE session_id=?", (total_tokens, session_id))
         conn.commit()
+
+    def create_run(self, run_id: str, prompt: str, owner_user_id: str, tenant_id: str, session_id: str, status: str = "queued") -> None:
+        conn = self.connect()
+        conn.execute(
+            "INSERT INTO runs (run_id, tenant_id, owner_user_id, session_id, prompt, status) VALUES (?,?,?,?,?,?)",
+            (run_id, tenant_id, owner_user_id, session_id, prompt, status),
+        )
+        conn.commit()
+
+    def update_run(self, run_id: str, owner_user_id: str, tenant_id: str, status: str, output: str | None = None, confirmation_token: str | None = None, error: str | None = None) -> bool:
+        conn = self.connect()
+        cursor = conn.execute(
+            "UPDATE runs SET status=?, output=?, confirmation_token=?, error=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
+            (status, output, confirmation_token, error, run_id, owner_user_id, tenant_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def get_run(self, run_id: str, owner_user_id: str, tenant_id: str) -> dict[str, Any] | None:
+        conn = self.connect()
+        row = conn.execute(
+            "SELECT run_id, tenant_id, owner_user_id, session_id, prompt, status, output, confirmation_token, error, created_at, updated_at FROM runs WHERE run_id=? AND owner_user_id=? AND tenant_id=?",
+            (run_id, owner_user_id, tenant_id),
+        ).fetchone()
+        if row is None:
+            return None
+        columns = ["run_id", "tenant_id", "owner_user_id", "session_id", "prompt", "status", "output", "confirmation_token", "error", "created_at", "updated_at"]
+        return dict(zip(columns, row))
+
+    def next_queued_run(self) -> dict[str, Any] | None:
+        conn = self.connect()
+        row = conn.execute(
+            "SELECT run_id, tenant_id, owner_user_id, session_id, prompt FROM runs WHERE status='queued' ORDER BY created_at LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        columns = ["run_id", "tenant_id", "owner_user_id", "session_id", "prompt"]
+        return dict(zip(columns, row))

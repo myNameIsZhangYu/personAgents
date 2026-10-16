@@ -3,6 +3,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from person_agents.runtime.state import StateStore
+
 
 @dataclass
 class Confirmation:
@@ -15,9 +17,9 @@ class Confirmation:
 
 
 class ConfirmationStore:
-    def __init__(self, ttl_seconds: int = 300) -> None:
+    def __init__(self, state_store: StateStore, ttl_seconds: int = 300) -> None:
+        self.state_store = state_store
         self.ttl_seconds = ttl_seconds
-        self._items: dict[str, Confirmation] = {}
 
     def create(self, owner_user_id: str, tenant_id: str, tool_name: str, arguments: dict[str, Any]) -> Confirmation:
         token = secrets.token_urlsafe(32)
@@ -29,19 +31,10 @@ class ConfirmationStore:
             arguments=arguments,
             expires_at=time.time() + self.ttl_seconds,
         )
-        self._items[token] = confirmation
-        return confirmation
+        return self.state_store.store_confirmation(confirmation, self.ttl_seconds)
 
     def get(self, token: str) -> Confirmation | None:
-        confirmation = self._items.get(token)
-        if confirmation and confirmation.expires_at < time.time():
-            del self._items[token]
-            return None
-        return confirmation
+        return self.state_store.get_confirmation(token)
 
     def consume(self, token: str) -> Confirmation | None:
-        confirmation = self.get(token)
-        if confirmation is None:
-            return None
-        del self._items[token]
-        return confirmation
+        return self.state_store.consume_confirmation(token)

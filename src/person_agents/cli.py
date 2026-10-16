@@ -93,6 +93,16 @@ def serve(
 
 
 @app.command()
+def worker() -> None:
+    """Run the background agent worker."""
+    setup_logging()
+    from person_agents.memory.sqlite_store import SQLiteStore
+    from person_agents.runtime.worker import worker_loop
+
+    asyncio.run(worker_loop(SQLiteStore()))
+
+
+@app.command()
 def run(
     prompt: str = typer.Argument(..., help="User prompt"),
     system: str = typer.Option("You are a helpful personal assistant.", help="System prompt"),

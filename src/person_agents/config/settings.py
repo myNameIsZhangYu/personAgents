@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     granted_permissions: str = "read,write"
     api_key_hash: str = ""
     default_tenant_id: str = "default"
+    redis_url: str = ""
 
 
 settings = Settings()

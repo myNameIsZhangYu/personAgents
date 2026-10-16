@@ -15,15 +15,18 @@ from person_agents.governance.audit import AuditLogger
 from person_agents.governance.policy import Permission, PolicyEngine
 from person_agents.governance.rate_limiter import RateLimiter
 from person_agents.observability.langfuse import trace_llm_call
+from person_agents.observability.metrics import llm_calls_total, tool_calls_total
+from person_agents.runtime.state import create_state_store
 from person_agents.security.confirmation import ConfirmationStore
 from person_agents.security.context import RequestContext
 
 logger = structlog.get_logger()
 
 _policy = PolicyEngine()
-_rate_limiter = RateLimiter()
+_state_store = create_state_store(settings.redis_url)
+_rate_limiter = RateLimiter(_state_store)
 _audit = AuditLogger()
-_confirmations = ConfirmationStore()
+_confirmations = ConfirmationStore(_state_store)
 
 def _configure_policy() -> None:
     for value in settings.granted_permissions.split(","):
@@ -85,6 +88,7 @@ async def governed_tool_call(
 
     result = await handler(arguments)
     _audit.record("middleware", f"tool:{tool_name}", str(arguments), str(result)[:200], request_id=request_id, owner_user_id=owner, tenant_id=tenant)
+    tool_calls_total.labels(tool_name, "success").inc()
     return result
 
 
@@ -103,6 +107,7 @@ async def governed_llm_call(
     start = time.monotonic()
     result = await call_fn(messages)
     elapsed_ms = int((time.monotonic() - start) * 1000)
+    llm_calls_total.labels("success", str(result.degraded).lower()).inc()
 
     _audit.record("middleware", "llm", str(messages)[-200:], str(result.content)[:200], "success")
     trace_llm_call(

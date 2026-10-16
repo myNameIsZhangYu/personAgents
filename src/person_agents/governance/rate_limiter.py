@@ -1,8 +1,9 @@
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 
 import structlog
+
+from person_agents.runtime.state import StateStore, create_state_store
 
 logger = structlog.get_logger()
 
@@ -30,16 +31,14 @@ class TokenBucket:
 
 
 class RateLimiter:
-    def __init__(self, llm_capacity: int = 10, llm_refill_rate: float = 1.0, tool_capacity: int = 20, tool_refill_rate: float = 2.0):
+    def __init__(self, state_store: StateStore | None = None, llm_capacity: int = 10, llm_refill_rate: float = 1.0, tool_capacity: int = 20, tool_refill_rate: float = 2.0):
+        self.state_store = state_store or create_state_store()
         self._llm_capacity = llm_capacity
         self._llm_refill_rate = llm_refill_rate
         self._tool_capacity = tool_capacity
         self._tool_refill_rate = tool_refill_rate
-        self._llm_buckets: defaultdict[str, TokenBucket] = defaultdict(lambda: TokenBucket(capacity=self._llm_capacity, refill_rate=self._llm_refill_rate))
-        self._tool_buckets: defaultdict[str, TokenBucket] = defaultdict(lambda: TokenBucket(capacity=self._tool_capacity, refill_rate=self._tool_refill_rate))
-
     def allow_llm(self, owner_user_id: str = "local", tenant_id: str = "default") -> bool:
-        return self._llm_buckets[f"{tenant_id}:{owner_user_id}"].try_acquire()
+        return self.state_store.acquire_bucket(f"llm:{tenant_id}:{owner_user_id}", self._llm_capacity, self._llm_refill_rate)
 
     def allow_tool(self, owner_user_id: str = "local", tenant_id: str = "default") -> bool:
         return self._tool_buckets[f"{tenant_id}:{owner_user_id}"].try_acquire()

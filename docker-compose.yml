@@ -18,6 +18,35 @@ services:
     depends_on:
       langfuse:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command: ["worker"]
+    env_file:
+      - .env
+    environment:
+      PERSON_AGENTS_DATA_DIR: /data
+      PERSON_AGENTS_SQLITE_PATH: /data/memory.db
+      PERSON_AGENTS_CHROMA_PATH: /data/chroma
+      LANGFUSE_HOST: http://langfuse:3000
+      PERSON_AGENTS_REDIS_URL: redis://redis:6379/0
+    volumes:
+      - app_data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   langfuse-db:
     image: postgres:16-alpine
